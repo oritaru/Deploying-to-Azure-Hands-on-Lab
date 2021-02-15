@@ -1,0 +1,56 @@
+name: Deploy Resource
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Hands-on-Lab/templates/**'
+
+jobs:
+  # ジョブの名前はメンバーで重複しないように指定
+  deploy-virtual-machine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # 登録したシークレットで Azure へログイン
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # ペアリージョンにリソースグループを作成
+      - name: Create Resource Group
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az group create --name "MCW-DR" --location "japanwest"
+
+
+      # Azure CLI を使用し ARM テンプレートから仮想ネットワークと Bastion を展開
+      - name: Deploy VNet and Bastion using ARM Template
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az deployment group create --resource-group "MCW-DR" --template-file ./Hands-on-Lab/templates/deploy-vnet-with-bastion.json --parameters ./Hands-on-Lab/templates/deploy-vnet-with-bastion.parameters.json
+
+      # Azure CLI を使用し ARM テンプレートから仮想マシンを展開
+      - name: Deploy Virtual Machine using ARM Template
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az deployment group create --resource-group "MCW-DR" --template-file ./Hands-on-Lab/templates/deploy-vms.json --parameters ./Hands-on-Lab/templates/deploy-vms.parameters.json
+
+      # Azure CLI を使用し ARM テンプレートから Recovery Service を展開
+      - name: Deploy Recovery Service using ARM Template
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az deployment group create --resource-group "MCW-DR" --template-file ./Hands-on-Lab/templates/deploy-recovery-services.json --parameters ./Hands-on-Lab/templates/deploy-recovery-services.parameters.json
+
+      # ログアウト
+      - name: Azure logout
+        run: |
+          az logout
